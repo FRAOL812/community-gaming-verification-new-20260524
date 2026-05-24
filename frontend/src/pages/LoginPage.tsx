@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from 'react';
-import { Crown, Gamepad2, Lock, ShieldCheck, UserCheck } from 'lucide-react';
+import { Crown, Eye, EyeOff, Gamepad2, Lock, ShieldCheck, UserCheck } from 'lucide-react';
 import { api, type Role } from '../lib/api';
 
 type Props = {
@@ -9,6 +9,7 @@ type Props = {
 export function LoginPage({ onLogin }: Props) {
   const [role, setRole] = useState<Role>('registrar');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -61,7 +62,15 @@ export function LoginPage({ onLogin }: Props) {
           <label className="mt-5 block text-sm font-black uppercase tracking-wider text-slate-200">Password</label>
           <div className="mt-2 flex items-center gap-3 rounded-3xl border-2 border-white/10 bg-slate-950 px-4 py-2 focus-within:border-yellow-300">
             <Lock className="text-yellow-300" />
-            <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" className="min-h-14 flex-1 bg-transparent text-lg font-black text-white outline-none placeholder:text-slate-500" placeholder="Enter role password" />
+            <input value={password} onChange={(e) => setPassword(e.target.value)} type={showPassword ? 'text' : 'password'} className="min-h-14 flex-1 bg-transparent text-lg font-black text-white outline-none placeholder:text-slate-500" placeholder="Enter role password" />
+            <button
+              type="button"
+              onClick={() => setShowPassword((value) => !value)}
+              className="touch-button rounded-xl p-2 text-slate-300 hover:text-yellow-300 active:scale-95"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+            >
+              {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+            </button>
           </div>
 
           {error && <div className="mt-4 rounded-2xl bg-red-600 p-3 text-center text-sm font-black text-white">{error}</div>}
