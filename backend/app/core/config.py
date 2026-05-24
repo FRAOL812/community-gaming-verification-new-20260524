@@ -5,6 +5,45 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DEFAULT_SHEET_ID = "1_rP5g4yHA56AMf7qHCoxSFmN5Ba2kIlpMSBHCiWaaJs"
+DEFAULT_FRONTEND_ORIGIN = "https://cgv-frontend-20260524.onrender.com"
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+    DEFAULT_FRONTEND_ORIGIN,
+]
+
+
+def _normalize_origin(origin: str) -> str:
+    return origin.strip().strip("'\"").rstrip("/")
+
+
+def _parse_cors_origins() -> list[str]:
+    raw_cors_origins = os.getenv("CORS_ORIGINS", "")
+    configured = (
+        [_normalize_origin(origin) for origin in raw_cors_origins.split(",")]
+        if raw_cors_origins.strip()
+        else list(DEFAULT_CORS_ORIGINS)
+    )
+
+    configured.append(DEFAULT_FRONTEND_ORIGIN)
+
+    frontend_url = _normalize_origin(os.getenv("FRONTEND_URL", ""))
+    if frontend_url:
+        configured.append(frontend_url)
+
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for origin in configured:
+        if not origin:
+            continue
+        if origin in seen:
+            continue
+        seen.add(origin)
+        deduped.append(origin)
+
+    return deduped
 
 
 class Settings:
@@ -23,14 +62,7 @@ class Settings:
     GOOGLE_CREDENTIALS_JSON: str = os.getenv("GOOGLE_CREDENTIALS_JSON", "")
     LOCAL_STORE_FILE: str = os.getenv("LOCAL_STORE_FILE", "local_players.json")
 
-    CORS_ORIGINS: list[str] = [
-        origin.strip()
-        for origin in os.getenv(
-            "CORS_ORIGINS",
-            "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174",
-        ).split(",")
-        if origin.strip()
-    ]
+    CORS_ORIGINS: list[str] = _parse_cors_origins()
 
     TOKEN_TTL_SECONDS: int = int(os.getenv("TOKEN_TTL_SECONDS", "43200"))
 
