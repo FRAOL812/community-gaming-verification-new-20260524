@@ -4,9 +4,6 @@ import tempfile
 from datetime import datetime, timezone
 from typing import Any
 from fastapi import HTTPException, status
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
 from app.core.config import get_settings
 from app.models import Player
 
@@ -73,10 +70,21 @@ class SheetsService:
         return path
 
     def _build_service(self):
-        credentials = service_account.Credentials.from_service_account_file(
-            self._credentials_file(), scopes=SCOPES
-        )
-        return build("sheets", "v4", credentials=credentials, cache_discovery=False)
+        try:
+            from google.oauth2 import service_account
+            from googleapiclient.discovery import build
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Google Sheets client not available: {exc}")
+
+        try:
+            credentials = service_account.Credentials.from_service_account_file(
+                self._credentials_file(), scopes=SCOPES
+            )
+            return build("sheets", "v4", credentials=credentials, cache_discovery=False)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Google Sheets client initialization failed: {exc}")
 
     def _range(self, a1: str) -> str:
         return f"{self.settings.SHEET_TAB}!{a1}"
@@ -95,7 +103,7 @@ class SheetsService:
                     valueInputOption="RAW",
                     body={"values": [HEADERS]},
                 ).execute()
-        except HttpError as exc:
+        except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Google Sheets header setup failed: {exc}")
 
     def get_rows(self) -> list[list[str]]:
@@ -105,7 +113,7 @@ class SheetsService:
                 range=self._range("A2:M"),
             ).execute()
             return result.get("values", [])
-        except HttpError as exc:
+        except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Google Sheets read failed: {exc}")
 
     def find_by_handle(self, handle: str) -> tuple[int | None, list[str] | None]:
@@ -171,7 +179,7 @@ class SheetsService:
             if row_number and found:
                 return self._row_to_player(row_number, found)
             return self._row_to_player(len(self.get_rows()) + 1, row)
-        except HttpError as exc:
+        except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Google Sheets append failed: {exc}")
 
     def update_result(self, row_number: int, exit_level: str, result_status: str, winnings: int, telebirr_ref: str) -> None:
@@ -184,7 +192,7 @@ class SheetsService:
                 valueInputOption="USER_ENTERED",
                 body={"values": values},
             ).execute()
-        except HttpError as exc:
+        except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Google Sheets update failed: {exc}")
 
     def update_verification_status(self, row_number: int, verification_status: str) -> None:
@@ -202,5 +210,5 @@ class SheetsService:
                 valueInputOption="USER_ENTERED",
                 body={"values": [[now]]},
             ).execute()
-        except HttpError as exc:
+        except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Google Sheets status update failed: {exc}")

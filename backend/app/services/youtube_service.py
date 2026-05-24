@@ -1,6 +1,4 @@
 from fastapi import HTTPException
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
 from app.core.config import get_settings
 from app.services.sheets_service import normalize_handle
 
@@ -10,6 +8,13 @@ class YouTubeService:
         self.settings = get_settings()
         if not self.settings.YT_API_KEY:
             raise HTTPException(status_code=500, detail="YT_API_KEY is not configured")
+        try:
+            from googleapiclient.discovery import build
+            from googleapiclient.errors import HttpError
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"YouTube client not available: {exc}")
+
+        self._http_error_type = HttpError
         self.youtube = build("youtube", "v3", developerKey=self.settings.YT_API_KEY, cache_discovery=False)
 
     def find_channel_by_handle(self, handle: str) -> dict | None:
@@ -35,7 +40,7 @@ class YouTubeService:
         except TypeError:
             # Older generated clients may not include forHandle. Fall back below.
             pass
-        except HttpError as exc:
+        except self._http_error_type as exc:
             # Fall back to search for 400/404 style lookup issues; fail for quota/auth errors.
             if exc.resp.status not in (400, 404):
                 raise HTTPException(status_code=502, detail=f"YouTube lookup failed: {exc}")
@@ -58,5 +63,5 @@ class YouTubeService:
                 "channel_title": item.get("snippet", {}).get("title", ""),
                 "handle": normalized,
             }
-        except HttpError as exc:
+        except self._http_error_type as exc:
             raise HTTPException(status_code=502, detail=f"YouTube lookup failed: {exc}")
