@@ -60,13 +60,19 @@ export function LoginPage({ onLogin }: Props) {
           </div>
 
           <label className="mt-5 block text-sm font-black uppercase tracking-wider text-slate-200">Password</label>
-          <div className="mt-2 flex items-center gap-3 rounded-3xl border-2 border-white/10 bg-slate-950 px-4 py-2 focus-within:border-yellow-300">
-            <Lock className="text-yellow-300" />
-            <input value={password} onChange={(e) => setPassword(e.target.value)} type={showPassword ? 'text' : 'password'} className="min-h-14 flex-1 bg-transparent text-lg font-black text-white outline-none placeholder:text-slate-500" placeholder="Enter role password" />
+          <div className="relative mt-2 rounded-3xl border-2 border-white/10 bg-slate-950 focus-within:border-yellow-300">
+            <Lock className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-yellow-300" />
+            <input
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              type={showPassword ? 'text' : 'password'}
+              className="min-h-14 w-full rounded-3xl bg-transparent pl-12 pr-14 text-lg font-black text-white outline-none placeholder:text-slate-500"
+              placeholder="Enter role password"
+            />
             <button
               type="button"
               onClick={() => setShowPassword((value) => !value)}
-              className="touch-button rounded-xl p-2 text-slate-300 hover:text-yellow-300 active:scale-95"
+              className="touch-button absolute right-2 top-1/2 -translate-y-1/2 rounded-xl p-2 text-slate-300 hover:text-yellow-300 active:scale-95"
               aria-label={showPassword ? 'Hide password' : 'Show password'}
             >
               {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
