@@ -1,0 +1,34 @@
+[
+  {
+    "row_number": 2,
+    "timestamp": "2026-05-17T05:28:59+00:00",
+    "full_name": "Test User",
+    "email": "test@example.com",
+    "phone_number": "0911111111",
+    "youtube_handle": "@markiplier",
+    "channel_id": "UC7_YxT-KID8kRbqZo7MyscQ",
+    "channel_title": "Markiplier",
+    "verification_status": "Ready",
+    "exit_level": "Level 1",
+    "result_status": "Won",
+    "winnings": "100",
+    "telebirr_ref": "TX123",
+    "updated_at": "2026-05-17T05:28:59+00:00"
+  },
+  {
+    "row_number": 3,
+    "timestamp": "2026-05-17T05:33:52+00:00",
+    "full_name": "FRAOL",
+    "email": "skepticscale@gmail.com",
+    "phone_number": "0913885322",
+    "youtube_handle": "@skepticscale2476",
+    "channel_id": "UCcAZmUx2OSwWNTxHcTGyLGw",
+    "channel_title": "Skeptic Scale",
+    "verification_status": "Ready",
+    "exit_level": "",
+    "result_status": "",
+    "winnings": "",
+    "telebirr_ref": "",
+    "updated_at": "2026-05-17T05:33:52+00:00"
+  }
+]

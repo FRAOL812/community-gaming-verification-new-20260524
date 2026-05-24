@@ -1,0 +1,49 @@
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Logs
+*.log
+frontend-dev.out.log
+frontend-dev.err.log
+backend/backend-dev.out.log
+backend/backend-dev.err.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/coverage/
+
+# Secrets / local credentials
+backend/credentials.json
+backend/*.secret.json
+*.pem
+*.key
+*.crt
+
+# Build/cache
+dist/
+build/
+tmp/
+*.tsbuildinfo
