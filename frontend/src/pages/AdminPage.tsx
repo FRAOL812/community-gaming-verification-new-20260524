@@ -10,7 +10,7 @@ type Props = {
 
 type Draft = {
   exit_level: ExitLevel;
-  status: 'Won' | 'Fell';
+  status: 'Won' | 'Failed';
   telebirr_ref: string;
 };
 
@@ -35,13 +35,17 @@ function payoutForWon(level: ExitLevel): number {
   return entry?.payout ?? 0;
 }
 
-function payoutForFell(level: ExitLevel): number {
-  const exitIndex = levelTree.findIndex((item) => item.level === level);
-  if (exitIndex <= 0) return 0;
-  for (let idx = exitIndex - 1; idx >= 0; idx -= 1) {
-    if (levelTree[idx].guarantee) return levelTree[idx].payout;
-  }
+function payoutForFailed(_level: ExitLevel): number {
   return 0;
+}
+
+function normalizeResultStatus(value: string): Draft['status'] {
+  return value.trim().toLowerCase() === 'won' ? 'Won' : 'Failed';
+}
+
+function normalizeResultStatusForDisplay(value: string): string {
+  if (!value.trim()) return '';
+  return normalizeResultStatus(value);
 }
 
 function cleanRef(value: string): string {
@@ -119,20 +123,22 @@ function statusEditRequiresSuperAdmin(player: Player, nextStatus: string): boole
 }
 
 function resultEditRequiresSuperAdmin(player: Player, nextDraft: Draft, nextWinnings: number): boolean {
+  const existingStatus = normalizeResultStatus(player.result_status);
+  const nextStatus = normalizeResultStatus(nextDraft.status);
   const existingValues = [
     player.exit_level.trim(),
-    player.result_status.trim(),
+    existingStatus,
     player.winnings.trim(),
-    player.telebirr_ref.trim(),
+    existingStatus === 'Failed' ? '' : player.telebirr_ref.trim(),
   ];
   const hasRecordedResult = existingValues.some((value) => value.length > 0);
   if (!hasRecordedResult) return false;
 
   const nextValues = [
     nextDraft.exit_level.trim(),
-    nextDraft.status.trim(),
+    nextStatus,
     String(nextWinnings).trim(),
-    nextDraft.telebirr_ref.trim(),
+    nextStatus === 'Failed' ? '' : nextDraft.telebirr_ref.trim(),
   ];
   return nextValues.some((value, index) => value !== existingValues[index]);
 }
@@ -201,7 +207,7 @@ export function AdminPage({ token, role }: Props) {
   function draftFor(player: Player): Draft {
     return drafts[player.row_number] || {
       exit_level: (player.exit_level as ExitLevel) || 'Level 1',
-      status: (player.result_status as Draft['status']) || 'Fell',
+      status: player.result_status ? normalizeResultStatus(player.result_status) : 'Failed',
       telebirr_ref: player.telebirr_ref || '',
     };
   }
@@ -274,16 +280,20 @@ export function AdminPage({ token, role }: Props) {
       return;
     }
     const draft = draftFor(player);
-    const projectedWinnings = draft.status === 'Won' ? payoutForWon(draft.exit_level) : payoutForFell(draft.exit_level);
+    const projectedWinnings = draft.status === 'Won' ? payoutForWon(draft.exit_level) : payoutForFailed(draft.exit_level);
     if (role === 'admin' && resultEditRequiresSuperAdmin(player, draft, projectedWinnings)) {
       setError('This result was already filled. Super admin login is required to change it.');
       return;
     }
+    const payload = {
+      ...draft,
+      telebirr_ref: draft.status === 'Failed' ? '' : draft.telebirr_ref,
+    };
     setSavingRow(player.row_number);
     setError('');
     setNotice('');
     try {
-      const response = await api.logResult(player.row_number, draft, token);
+      const response = await api.logResult(player.row_number, payload, token);
       setNotice(`${player.full_name}: result saved. Winnings: $${response.winnings}`);
       await loadPlayers();
     } catch (err) {
@@ -327,11 +337,13 @@ export function AdminPage({ token, role }: Props) {
             const draft = draftFor(player);
             const currentStatus = statusFor(player);
             const pendingStatus = isPendingStatus(currentStatus);
-            const preview = draft.status === 'Won' ? payoutForWon(draft.exit_level) : payoutForFell(draft.exit_level);
+            const failedResult = draft.status === 'Failed';
+            const preview = draft.status === 'Won' ? payoutForWon(draft.exit_level) : payoutForFailed(draft.exit_level);
             const statusLocked = hasLockedStatus(player);
             const resultFilled = hasExistingResult(player);
             const statusChangeLockedForAdmin = role === 'admin' && statusEditRequiresSuperAdmin(player, currentStatus);
             const resultChangeLockedForAdmin = role === 'admin' && resultEditRequiresSuperAdmin(player, draft, preview);
+            const recordedResultStatus = normalizeResultStatusForDisplay(player.result_status);
             return (
               <article key={player.row_number} className="rounded-[2rem] border border-white/10 bg-white/10 p-4 shadow-glow">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -339,7 +351,7 @@ export function AdminPage({ token, role }: Props) {
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <span className="rounded-full bg-yellow-400 px-3 py-1 text-xs font-black text-slate-950">Row {player.row_number}</span>
                       <span className="rounded-full bg-sky-900 px-3 py-1 text-xs font-black text-sky-200">Status: {player.verification_status || 'Pending'}</span>
-                      {player.result_status ? <span className="rounded-full bg-emerald-400 px-3 py-1 text-xs font-black text-slate-950">Logged: {player.result_status}</span> : <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-black text-white">Pending Result</span>}
+                      {recordedResultStatus ? <span className="rounded-full bg-emerald-400 px-3 py-1 text-xs font-black text-slate-950">Logged: {recordedResultStatus}</span> : <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-black text-white">Pending Result</span>}
                       {statusLocked && <span className="rounded-full bg-rose-500 px-3 py-1 text-xs font-black text-white">Status Locked</span>}
                       {resultFilled && <span className="rounded-full bg-indigo-500 px-3 py-1 text-xs font-black text-white">Result Filled</span>}
                       {role === 'super_admin' && (statusLocked || resultFilled) && (
@@ -356,7 +368,7 @@ export function AdminPage({ token, role }: Props) {
                         <div className="grid gap-1 sm:grid-cols-2">
                           <p>Status: <span className="font-black text-white">{player.verification_status || 'Pending'}</span></p>
                           <p>Exit Level: <span className="font-black text-white">{player.exit_level || '-'}</span></p>
-                          <p>Result: <span className="font-black text-white">{player.result_status || '-'}</span></p>
+                          <p>Result: <span className="font-black text-white">{recordedResultStatus || '-'}</span></p>
                           <p>Winnings: <span className="font-black text-white">{player.winnings || '-'}</span></p>
                           <p>Telebirr Ref: <span className="font-black text-white">{player.telebirr_ref || '-'}</span></p>
                           <p>Updated At: <span className="font-black text-white">{player.updated_at || '-'}</span></p>
@@ -397,7 +409,7 @@ export function AdminPage({ token, role }: Props) {
                       <select value={draft.exit_level} disabled={pendingStatus} onChange={(e) => updateDraft(player.row_number, { exit_level: e.target.value as Draft['exit_level'] })} className="min-h-12 w-full rounded-2xl border-2 border-white/10 bg-slate-950 px-3 font-black text-white outline-none focus:border-yellow-300 disabled:cursor-not-allowed disabled:opacity-50">
                         {levelTree.map((levelInfo) => (
                           <option key={levelInfo.level} value={levelInfo.level}>
-                            {levelInfo.level} ({levelInfo.cards} cards) - {levelInfo.payout}{levelInfo.guarantee ? ' Guarantee' : ''}
+                            {levelInfo.level} ({levelInfo.cards} cards) - {levelInfo.payout}
                           </option>
                         ))}
                       </select>
@@ -405,20 +417,20 @@ export function AdminPage({ token, role }: Props) {
                     <label className="block">
                       <span className="mb-1 block text-xs font-black uppercase tracking-wider text-slate-300">Status</span>
                       <select value={draft.status} disabled={pendingStatus} onChange={(e) => updateDraft(player.row_number, { status: e.target.value as Draft['status'] })} className="min-h-12 w-full rounded-2xl border-2 border-white/10 bg-slate-950 px-3 font-black text-white outline-none focus:border-yellow-300 disabled:cursor-not-allowed disabled:opacity-50">
-                        <option>Fell</option>
+                        <option>Failed</option>
                         <option>Won</option>
                       </select>
                     </label>
                     <label className="block sm:col-span-2">
                       <span className="mb-1 block text-xs font-black uppercase tracking-wider text-slate-300">Telebirr Ref</span>
                       <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-                        <input value={draft.telebirr_ref} disabled={pendingStatus} onChange={(e) => updateDraft(player.row_number, { telebirr_ref: e.target.value })} className="min-h-12 w-full rounded-2xl border-2 border-white/10 bg-slate-950 px-4 font-bold text-white outline-none placeholder:text-slate-500 focus:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-50" placeholder="Payment transaction ID" />
-                        <label className={`touch-button flex min-h-12 items-center justify-center rounded-2xl px-4 font-black ${pendingStatus ? 'cursor-not-allowed bg-slate-700 text-slate-300 opacity-60' : ocrRow === player.row_number ? 'cursor-not-allowed bg-slate-700 text-slate-300' : 'cursor-pointer bg-emerald-300 text-slate-950'} ${ocrRow !== null && ocrRow !== player.row_number ? 'opacity-60' : ''}`}>
+                        <input value={draft.telebirr_ref} disabled={pendingStatus || failedResult} onChange={(e) => updateDraft(player.row_number, { telebirr_ref: e.target.value })} className="min-h-12 w-full rounded-2xl border-2 border-white/10 bg-slate-950 px-4 font-bold text-white outline-none placeholder:text-slate-500 focus:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-50" placeholder={failedResult ? 'Disabled for failed result' : 'Payment transaction ID'} />
+                        <label className={`touch-button flex min-h-12 items-center justify-center rounded-2xl px-4 font-black ${(pendingStatus || failedResult) ? 'cursor-not-allowed bg-slate-700 text-slate-300 opacity-60' : ocrRow === player.row_number ? 'cursor-not-allowed bg-slate-700 text-slate-300' : 'cursor-pointer bg-emerald-300 text-slate-950'} ${ocrRow !== null && ocrRow !== player.row_number ? 'opacity-60' : ''}`}>
                           <input
                             type="file"
                             accept="image/*"
                             className="hidden"
-                            disabled={pendingStatus || ocrRow !== null}
+                            disabled={pendingStatus || failedResult || ocrRow !== null}
                             onChange={(event) => {
                               const file = event.target.files?.[0];
                               event.target.value = '';
@@ -427,11 +439,11 @@ export function AdminPage({ token, role }: Props) {
                               }
                             }}
                           />
-                          {pendingStatus ? 'Disabled' : ocrRow === player.row_number ? 'Reading Photo...' : 'Pick Photo'}
+                          {(pendingStatus || failedResult) ? 'Disabled' : ocrRow === player.row_number ? 'Reading Photo...' : 'Pick Photo'}
                         </label>
                       </div>
                       <p className="mt-1 text-xs font-semibold text-slate-400">
-                        Mobile: choose Telebirr receipt image from gallery to auto-fill the reference.
+                        {failedResult ? 'Transaction reference is blocked for failed players (no payout).' : 'Mobile: choose Telebirr receipt image from gallery to auto-fill the reference.'}
                       </p>
                     </label>
                     <div className="flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-white">
@@ -439,7 +451,7 @@ export function AdminPage({ token, role }: Props) {
                       <span className="text-sm font-black">Winnings: ${preview}</span>
                     </div>
                     <p className="self-center text-xs font-semibold text-slate-300">
-                      Fell uses last cleared guarantee (Level 3, 6, 9).
+                      Failed players are not paid and cannot submit transaction references.
                     </p>
                     <button onClick={() => saveResult(player)} disabled={pendingStatus || savingRow === player.row_number} className="touch-button flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-emerald-400 px-4 font-black text-slate-950 disabled:opacity-50 active:scale-95">
                       <Save size={18} /> {savingRow === player.row_number ? 'Saving...' : 'Log Result'}

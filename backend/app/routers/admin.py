@@ -6,22 +6,14 @@ from app.services.player_store_service import get_player_store
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
-LEVEL_ORDER = [f"Level {i}" for i in range(1, 10)]
-GUARANTEE_LEVELS = {"Level 3", "Level 6", "Level 9"}
-
-
-def _fallback_guarantee_winnings(exit_level: str, payout_map: dict[str, int]) -> int:
-    try:
-        exit_index = LEVEL_ORDER.index(exit_level)
-    except ValueError:
-        return 0
-
-    # Guarantee applies to levels already cleared before the failed level.
-    cleared_levels = LEVEL_ORDER[:exit_index]
-    for level in reversed(cleared_levels):
-        if level in GUARANTEE_LEVELS:
-            return payout_map.get(level, 0)
-    return 0
+def _normalize_result_status(value: str) -> str:
+    normalized = value.strip()
+    lowered = normalized.lower()
+    if lowered == "won":
+        return "Won"
+    if lowered in ("fell", "failed"):
+        return "Failed"
+    return normalized
 
 
 def _get_player_by_row(players: list[Player], row_number: int) -> Player:
@@ -34,7 +26,7 @@ def _get_player_by_row(players: list[Player], row_number: int) -> Player:
 def _result_edit_requires_super_admin(player: Player, next_exit_level: str, next_status: str, next_winnings: int, next_telebirr_ref: str) -> bool:
     existing_values = (
         player.exit_level.strip(),
-        player.result_status.strip(),
+        _normalize_result_status(player.result_status),
         player.winnings.strip(),
         player.telebirr_ref.strip(),
     )
@@ -43,7 +35,7 @@ def _result_edit_requires_super_admin(player: Player, next_exit_level: str, next
         return False
     next_values = (
         next_exit_level.strip(),
-        next_status.strip(),
+        _normalize_result_status(next_status),
         str(next_winnings).strip(),
         next_telebirr_ref.strip(),
     )
@@ -79,17 +71,21 @@ def log_result(row_number: int, payload: ResultRequest, role: Role = Depends(req
     current_player = _get_player_by_row(players, row_number)
     if current_player.verification_status.strip().lower() == "pending":
         raise HTTPException(status_code=400, detail="Player is still pending. Update status before logging result.")
-    if payload.status == "Won":
+
+    normalized_status = _normalize_result_status(payload.status)
+    if normalized_status == "Won":
         winnings = settings.payout_map.get(payload.exit_level, 0)
     else:
-        winnings = _fallback_guarantee_winnings(payload.exit_level, settings.payout_map)
+        winnings = 0
+
+    next_telebirr_ref = payload.telebirr_ref.strip() if normalized_status == "Won" else ""
 
     if _result_edit_requires_super_admin(
         current_player,
         payload.exit_level,
-        payload.status,
+        normalized_status,
         winnings,
-        payload.telebirr_ref,
+        next_telebirr_ref,
     ):
         _assert_super_admin_for_edit_lock(
             role,
@@ -99,9 +95,9 @@ def log_result(row_number: int, payload: ResultRequest, role: Role = Depends(req
     player_store.update_result(
         row_number=row_number,
         exit_level=payload.exit_level,
-        result_status=payload.status,
+        result_status=normalized_status,
         winnings=winnings,
-        telebirr_ref=payload.telebirr_ref,
+        telebirr_ref=next_telebirr_ref,
     )
     return ResultResponse(
         ok=True,

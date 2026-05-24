@@ -98,7 +98,7 @@ export const api = {
       | 'Level 7'
       | 'Level 8'
       | 'Level 9';
-    status: 'Won' | 'Fell';
+    status: 'Won' | 'Failed';
     telebirr_ref: string;
   }, token: string) =>
     request<{ ok: boolean; message: string; row_number: number; winnings: number }>(`/api/admin/players/${rowNumber}/result`, {

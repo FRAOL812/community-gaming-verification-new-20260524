@@ -70,7 +70,8 @@ class ResultRequest(BaseModel):
         "Level 8",
         "Level 9",
     ]
-    status: Literal["Won", "Fell"]
+    # Accept legacy "Fell" during transition, but frontend should send "Failed".
+    status: Literal["Won", "Failed", "Fell"]
     telebirr_ref: str = Field(default="", max_length=120)
 
 
