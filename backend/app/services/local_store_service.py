@@ -99,7 +99,7 @@ class LocalStoreService:
             "youtube_handle": normalize_handle(str(data.get("youtube_handle", ""))),
             "channel_id": str(data.get("channel_id", "") or ""),
             "channel_title": str(data.get("channel_title", "") or ""),
-            "verification_status": "Pending",
+            "verification_status": "PENDING",
             "exit_level": "",
             "result_status": "",
             "winnings": "",

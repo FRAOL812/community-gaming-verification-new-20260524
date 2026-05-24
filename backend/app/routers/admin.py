@@ -6,6 +6,22 @@ from app.services.player_store_service import get_player_store
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
+ALLOWED_VERIFICATION_STATUSES = {"WIN", "FAILED", "DISQUALIFIED"}
+NORMALIZED_VERIFICATION_STATUSES = {"WIN", "PENDING", "FAILED", "DISQUALIFIED"}
+
+
+def _canonical_verification_status(value: str) -> str:
+    lowered = value.strip().lower()
+    if lowered in ("win", "won", "completed"):
+        return "WIN"
+    if lowered in ("pending", "ready"):
+        return "PENDING"
+    if lowered in ("failed", "fail"):
+        return "FAILED"
+    if lowered == "disqualified":
+        return "DISQUALIFIED"
+    return value.strip().upper()
+
 def _normalize_result_status(value: str) -> str:
     normalized = value.strip()
     lowered = normalized.lower()
@@ -80,9 +96,18 @@ def _result_edit_requires_super_admin(player: Player, next_exit_level: str, next
 
 def _status_edit_requires_super_admin(player: Player, next_status: str) -> bool:
     current_status = player.verification_status.strip()
-    if not current_status or current_status.lower() in ("ready", "pending"):
+    if not current_status or _canonical_verification_status(current_status) == "PENDING":
         return False
-    return current_status != next_status.strip()
+    return _canonical_verification_status(current_status) != _canonical_verification_status(next_status)
+
+
+def _normalize_player_verification_status(player: Player) -> Player:
+    normalized = _canonical_verification_status(player.verification_status or "PENDING")
+    if normalized not in NORMALIZED_VERIFICATION_STATUSES:
+        normalized = "PENDING"
+    if normalized == player.verification_status:
+        return player
+    return player.model_copy(update={"verification_status": normalized})
 
 
 def _assert_super_admin_for_edit_lock(role: Role, message: str) -> None:
@@ -93,7 +118,7 @@ def _assert_super_admin_for_edit_lock(role: Role, message: str) -> None:
 @router.get("/players", response_model=list[Player])
 def list_players(_role=Depends(require_admin)):
     player_store, _using_local_store = get_player_store()
-    return player_store.list_players()
+    return [_normalize_player_verification_status(player) for player in player_store.list_players()]
 
 
 @router.post("/players/{row_number}/result", response_model=ResultResponse)
@@ -105,7 +130,7 @@ def log_result(row_number: int, payload: ResultRequest, role: Role = Depends(req
     player_store, using_local_store = get_player_store()
     players = player_store.list_players()
     current_player = _get_player_by_row(players, row_number)
-    if current_player.verification_status.strip().lower() == "pending":
+    if _canonical_verification_status(current_player.verification_status) == "PENDING":
         raise HTTPException(status_code=400, detail="Player is still pending. Update status before logging result.")
 
     normalized_status = _normalize_result_status(payload.status)
@@ -148,9 +173,12 @@ def update_player_status(row_number: int, payload: StatusUpdateRequest, role: Ro
     if row_number < 2:
         raise HTTPException(status_code=400, detail="Invalid sheet row number")
 
-    verification_status = payload.verification_status.strip()
+    verification_status = _canonical_verification_status(payload.verification_status)
     if not verification_status:
         raise HTTPException(status_code=400, detail="Verification status is required")
+    if verification_status not in ALLOWED_VERIFICATION_STATUSES:
+        allowed = ", ".join(sorted(ALLOWED_VERIFICATION_STATUSES))
+        raise HTTPException(status_code=400, detail=f"Invalid verification status. Allowed values: {allowed}")
 
     player_store, using_local_store = get_player_store()
     players = player_store.list_players()

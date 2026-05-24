@@ -83,7 +83,7 @@ class ResultResponse(BaseModel):
 
 
 class StatusUpdateRequest(BaseModel):
-    verification_status: Literal["Completed", "Failed", "Disqualified", "Pending"]
+    verification_status: str = Field(min_length=1, max_length=40)
 
 
 class StatusUpdateResponse(BaseModel):

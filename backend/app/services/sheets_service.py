@@ -152,7 +152,7 @@ class SheetsService:
             normalize_handle(data.get("youtube_handle", "")),
             data.get("channel_id", "") or "",
             data.get("channel_title", "") or "",
-            "Pending",
+            "PENDING",
             "",
             "",
             "",

@@ -14,7 +14,8 @@ type Draft = {
   telebirr_ref: string;
 };
 
-const verificationStatusOptions = ['Completed', 'Failed', 'Disqualified', 'Pending'] as const;
+const verificationStatusOptions = ['WIN', 'FAILED', 'DISQUALIFIED'] as const;
+type VerificationStatus = (typeof verificationStatusOptions)[number] | 'PENDING';
 
 const levelTree = [
   { level: 'Level 1', cards: 2, payout: 100, guarantee: false },
@@ -48,6 +49,14 @@ function normalizeResultStatus(value: string): Draft['status'] | '' {
 
 function normalizeResultStatusForDisplay(value: string): string {
   return normalizeResultStatus(value);
+}
+
+function normalizeVerificationStatus(value: string): VerificationStatus {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'win' || normalized === 'won' || normalized === 'completed') return 'WIN';
+  if (normalized === 'failed' || normalized === 'fail') return 'FAILED';
+  if (normalized === 'disqualified') return 'DISQUALIFIED';
+  return 'PENDING';
 }
 
 function normalizeWinningsForComparison(value: string | number): string {
@@ -109,7 +118,7 @@ function extractTelebirrReference(text: string): string | null {
 }
 
 function isPendingStatus(statusValue: string): boolean {
-  return statusValue.trim().toLowerCase() === 'pending';
+  return normalizeVerificationStatus(statusValue) === 'PENDING';
 }
 
 function hasExistingResult(player: Player): boolean {
@@ -123,18 +132,15 @@ function hasExistingResult(player: Player): boolean {
 }
 
 function hasLockedStatus(player: Player): boolean {
-  const currentStatus = player.verification_status.trim().toLowerCase();
-  if (!currentStatus) return false;
-  return currentStatus !== 'ready' && currentStatus !== 'pending';
+  return normalizeVerificationStatus(player.verification_status) !== 'PENDING';
 }
 
 function statusEditRequiresSuperAdmin(player: Player, nextStatus: string): boolean {
-  const currentStatus = player.verification_status.trim();
-  const currentNormalized = currentStatus.toLowerCase();
-  if (!currentStatus || currentNormalized === 'ready' || currentNormalized === 'pending') {
+  const currentNormalized = normalizeVerificationStatus(player.verification_status);
+  if (currentNormalized === 'PENDING') {
     return false;
   }
-  return currentStatus !== nextStatus.trim();
+  return currentNormalized !== normalizeVerificationStatus(nextStatus);
 }
 
 function resultEditRequiresSuperAdmin(player: Player, nextDraft: Draft, nextWinnings: number): boolean {
@@ -234,12 +240,13 @@ export function AdminPage({ token, role }: Props) {
     setDrafts({ ...drafts, [row]: { ...current, ...patch } });
   }
 
-  function statusFor(player: Player): string {
-    return statusDrafts[player.row_number] ?? player.verification_status ?? 'Pending';
+  function statusFor(player: Player): VerificationStatus {
+    const raw = statusDrafts[player.row_number] ?? player.verification_status ?? 'PENDING';
+    return normalizeVerificationStatus(raw);
   }
 
   function updateStatusDraft(row: number, nextStatus: string) {
-    setStatusDrafts({ ...statusDrafts, [row]: nextStatus });
+    setStatusDrafts({ ...statusDrafts, [row]: normalizeVerificationStatus(nextStatus) });
   }
 
   async function readTelebirrRefFromImage(player: Player, file: File) {
@@ -293,7 +300,7 @@ export function AdminPage({ token, role }: Props) {
 
   async function saveResult(player: Player) {
     if (isPendingStatus(statusFor(player))) {
-      setError('Status is Pending. Set player status to Completed, Failed, or Disqualified before logging result.');
+      setError('Status is PENDING. Set player status to WIN, FAILED, or DISQUALIFIED before logging result.');
       return;
     }
     const draft = draftFor(player);
@@ -367,7 +374,7 @@ export function AdminPage({ token, role }: Props) {
                   <div className="min-w-0">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <span className="rounded-full bg-yellow-400 px-3 py-1 text-xs font-black text-slate-950">Row {player.row_number}</span>
-                      <span className="rounded-full bg-sky-900 px-3 py-1 text-xs font-black text-sky-200">Status: {player.verification_status || 'Pending'}</span>
+                      <span className="rounded-full bg-sky-900 px-3 py-1 text-xs font-black text-sky-200">Status: {normalizeVerificationStatus(player.verification_status)}</span>
                       {recordedResultStatus ? <span className="rounded-full bg-emerald-400 px-3 py-1 text-xs font-black text-slate-950">Logged: {recordedResultStatus}</span> : <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-black text-white">Pending Result</span>}
                       {statusLocked && <span className="rounded-full bg-rose-500 px-3 py-1 text-xs font-black text-white">Status Locked</span>}
                       {resultFilled && <span className="rounded-full bg-indigo-500 px-3 py-1 text-xs font-black text-white">Result Filled</span>}
@@ -383,7 +390,7 @@ export function AdminPage({ token, role }: Props) {
                       <div className="mt-3 rounded-2xl border border-indigo-400/40 bg-indigo-500/10 p-3 text-xs font-bold text-indigo-100">
                         <p className="mb-2 text-[11px] font-black uppercase tracking-wider text-indigo-200">Already Saved Data</p>
                         <div className="grid gap-1 sm:grid-cols-2">
-                          <p>Status: <span className="font-black text-white">{player.verification_status || 'Pending'}</span></p>
+                          <p>Status: <span className="font-black text-white">{normalizeVerificationStatus(player.verification_status)}</span></p>
                           <p>Exit Level: <span className="font-black text-white">{player.exit_level || '-'}</span></p>
                           <p>Result: <span className="font-black text-white">{recordedResultStatus || '-'}</span></p>
                           <p>Winnings: <span className="font-black text-white">{player.winnings || '-'}</span></p>
@@ -399,7 +406,7 @@ export function AdminPage({ token, role }: Props) {
                       <p className="mb-2 text-xs font-black uppercase tracking-wider text-sky-200">Update Registration Status</p>
                       <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
                         <select value={currentStatus} onChange={(e) => updateStatusDraft(player.row_number, e.target.value)} className="min-h-12 w-full rounded-2xl border-2 border-white/10 bg-slate-950 px-3 font-black text-white outline-none focus:border-sky-300">
-                          {!verificationStatusOptions.includes(currentStatus as typeof verificationStatusOptions[number]) && <option>{currentStatus}</option>}
+                          {currentStatus === 'PENDING' && <option value="PENDING" disabled>PENDING (initial)</option>}
                           {verificationStatusOptions.map((statusValue) => (
                             <option key={statusValue}>{statusValue}</option>
                           ))}
@@ -415,11 +422,11 @@ export function AdminPage({ token, role }: Props) {
                       )}
                     </div>
 
-                    {pendingStatus && (
-                      <p className="sm:col-span-2 rounded-2xl border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs font-black uppercase tracking-wide text-amber-200">
-                        Pending status selected. Result section stays disabled until status is Completed, Failed, or Disqualified.
-                      </p>
-                    )}
+                      {pendingStatus && (
+                        <p className="sm:col-span-2 rounded-2xl border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs font-black uppercase tracking-wide text-amber-200">
+                          PENDING status selected. Result section stays disabled until status is WIN, FAILED, or DISQUALIFIED.
+                        </p>
+                      )}
 
                     <label className="block">
                       <span className="mb-1 block text-xs font-black uppercase tracking-wider text-slate-300">Exit Level</span>
@@ -432,7 +439,7 @@ export function AdminPage({ token, role }: Props) {
                       </select>
                     </label>
                     <label className="block">
-                      <span className="mb-1 block text-xs font-black uppercase tracking-wider text-slate-300">Status</span>
+                      <span className="mb-1 block text-xs font-black uppercase tracking-wider text-slate-300">Result</span>
                       <select value={draft.status} disabled={pendingStatus} onChange={(e) => updateDraft(player.row_number, { status: e.target.value as Draft['status'] })} className="min-h-12 w-full rounded-2xl border-2 border-white/10 bg-slate-950 px-3 font-black text-white outline-none focus:border-yellow-300 disabled:cursor-not-allowed disabled:opacity-50">
                         <option>Failed</option>
                         <option>Won</option>
