@@ -94,6 +94,49 @@ function isPendingStatus(statusValue: string): boolean {
   return statusValue.trim().toLowerCase() === 'pending';
 }
 
+function hasExistingResult(player: Player): boolean {
+  return [
+    player.exit_level,
+    player.result_status,
+    player.winnings,
+    player.telebirr_ref,
+  ].some((value) => value.trim().length > 0);
+}
+
+function hasLockedStatus(player: Player): boolean {
+  const currentStatus = player.verification_status.trim().toLowerCase();
+  if (!currentStatus) return false;
+  return currentStatus !== 'ready' && currentStatus !== 'pending';
+}
+
+function statusEditRequiresSuperAdmin(player: Player, nextStatus: string): boolean {
+  const currentStatus = player.verification_status.trim();
+  const currentNormalized = currentStatus.toLowerCase();
+  if (!currentStatus || currentNormalized === 'ready' || currentNormalized === 'pending') {
+    return false;
+  }
+  return currentStatus !== nextStatus.trim();
+}
+
+function resultEditRequiresSuperAdmin(player: Player, nextDraft: Draft, nextWinnings: number): boolean {
+  const existingValues = [
+    player.exit_level.trim(),
+    player.result_status.trim(),
+    player.winnings.trim(),
+    player.telebirr_ref.trim(),
+  ];
+  const hasRecordedResult = existingValues.some((value) => value.length > 0);
+  if (!hasRecordedResult) return false;
+
+  const nextValues = [
+    nextDraft.exit_level.trim(),
+    nextDraft.status.trim(),
+    String(nextWinnings).trim(),
+    nextDraft.telebirr_ref.trim(),
+  ];
+  return nextValues.some((value, index) => value !== existingValues[index]);
+}
+
 export function AdminPage({ token, role }: Props) {
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
@@ -207,6 +250,10 @@ export function AdminPage({ token, role }: Props) {
       setError('Verification status is required');
       return;
     }
+    if (role === 'admin' && statusEditRequiresSuperAdmin(player, nextStatus)) {
+      setError('This status was already filled. Super admin login is required to change it.');
+      return;
+    }
     setSavingStatusRow(player.row_number);
     setError('');
     setNotice('');
@@ -227,6 +274,11 @@ export function AdminPage({ token, role }: Props) {
       return;
     }
     const draft = draftFor(player);
+    const projectedWinnings = draft.status === 'Won' ? payoutForWon(draft.exit_level) : payoutForFell(draft.exit_level);
+    if (role === 'admin' && resultEditRequiresSuperAdmin(player, draft, projectedWinnings)) {
+      setError('This result was already filled. Super admin login is required to change it.');
+      return;
+    }
     setSavingRow(player.row_number);
     setError('');
     setNotice('');
@@ -276,6 +328,10 @@ export function AdminPage({ token, role }: Props) {
             const currentStatus = statusFor(player);
             const pendingStatus = isPendingStatus(currentStatus);
             const preview = draft.status === 'Won' ? payoutForWon(draft.exit_level) : payoutForFell(draft.exit_level);
+            const statusLocked = hasLockedStatus(player);
+            const resultFilled = hasExistingResult(player);
+            const statusChangeLockedForAdmin = role === 'admin' && statusEditRequiresSuperAdmin(player, currentStatus);
+            const resultChangeLockedForAdmin = role === 'admin' && resultEditRequiresSuperAdmin(player, draft, preview);
             return (
               <article key={player.row_number} className="rounded-[2rem] border border-white/10 bg-white/10 p-4 shadow-glow">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -284,11 +340,29 @@ export function AdminPage({ token, role }: Props) {
                       <span className="rounded-full bg-yellow-400 px-3 py-1 text-xs font-black text-slate-950">Row {player.row_number}</span>
                       <span className="rounded-full bg-sky-900 px-3 py-1 text-xs font-black text-sky-200">Status: {player.verification_status || 'Pending'}</span>
                       {player.result_status ? <span className="rounded-full bg-emerald-400 px-3 py-1 text-xs font-black text-slate-950">Logged: {player.result_status}</span> : <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-black text-white">Pending Result</span>}
+                      {statusLocked && <span className="rounded-full bg-rose-500 px-3 py-1 text-xs font-black text-white">Status Locked</span>}
+                      {resultFilled && <span className="rounded-full bg-indigo-500 px-3 py-1 text-xs font-black text-white">Result Filled</span>}
+                      {role === 'super_admin' && (statusLocked || resultFilled) && (
+                        <span className="rounded-full bg-amber-300 px-3 py-1 text-xs font-black text-slate-950">Super Admin Override Enabled</span>
+                      )}
                     </div>
                     <h3 className="truncate text-2xl font-black text-white">{player.full_name}</h3>
                     <p className="text-lg font-black text-yellow-300">{player.youtube_handle}</p>
                     <p className="mt-1 text-sm font-semibold text-slate-300">{player.phone_number} | {player.email}</p>
                     {player.telebirr_ref && <p className="mt-2 text-sm font-black text-emerald-300">Telebirr: {player.telebirr_ref}</p>}
+                    {(statusLocked || resultFilled) && (
+                      <div className="mt-3 rounded-2xl border border-indigo-400/40 bg-indigo-500/10 p-3 text-xs font-bold text-indigo-100">
+                        <p className="mb-2 text-[11px] font-black uppercase tracking-wider text-indigo-200">Already Saved Data</p>
+                        <div className="grid gap-1 sm:grid-cols-2">
+                          <p>Status: <span className="font-black text-white">{player.verification_status || 'Pending'}</span></p>
+                          <p>Exit Level: <span className="font-black text-white">{player.exit_level || '-'}</span></p>
+                          <p>Result: <span className="font-black text-white">{player.result_status || '-'}</span></p>
+                          <p>Winnings: <span className="font-black text-white">{player.winnings || '-'}</span></p>
+                          <p>Telebirr Ref: <span className="font-black text-white">{player.telebirr_ref || '-'}</span></p>
+                          <p>Updated At: <span className="font-black text-white">{player.updated_at || '-'}</span></p>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-2 lg:w-[520px]">
@@ -305,6 +379,11 @@ export function AdminPage({ token, role }: Props) {
                           {savingStatusRow === player.row_number ? 'Updating...' : 'Update Status'}
                         </button>
                       </div>
+                      {statusChangeLockedForAdmin && (
+                        <p className="mt-2 text-xs font-black uppercase tracking-wide text-rose-200">
+                          Admin cannot overwrite this status. Super admin must perform this change.
+                        </p>
+                      )}
                     </div>
 
                     {pendingStatus && (
@@ -365,6 +444,11 @@ export function AdminPage({ token, role }: Props) {
                     <button onClick={() => saveResult(player)} disabled={pendingStatus || savingRow === player.row_number} className="touch-button flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-emerald-400 px-4 font-black text-slate-950 disabled:opacity-50 active:scale-95">
                       <Save size={18} /> {savingRow === player.row_number ? 'Saving...' : 'Log Result'}
                     </button>
+                    {resultChangeLockedForAdmin && (
+                      <p className="sm:col-span-2 text-xs font-black uppercase tracking-wide text-rose-200">
+                        Admin cannot overwrite this result. Super admin must perform this change.
+                      </p>
+                    )}
                   </div>
                 </div>
               </article>
