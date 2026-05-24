@@ -39,13 +39,27 @@ function payoutForFailed(_level: ExitLevel): number {
   return 0;
 }
 
-function normalizeResultStatus(value: string): Draft['status'] {
-  return value.trim().toLowerCase() === 'won' ? 'Won' : 'Failed';
+function normalizeResultStatus(value: string): Draft['status'] | '' {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'won') return 'Won';
+  if (normalized === 'failed' || normalized === 'fell') return 'Failed';
+  return '';
 }
 
 function normalizeResultStatusForDisplay(value: string): string {
-  if (!value.trim()) return '';
   return normalizeResultStatus(value);
+}
+
+function normalizeWinningsForComparison(value: string | number): string {
+  const trimmed = String(value).trim();
+  if (!trimmed) return '0';
+  const numeric = Number(trimmed);
+  if (!Number.isNaN(numeric)) return String(numeric);
+  return trimmed;
+}
+
+function hasMeaningfulWinnings(value: string): boolean {
+  return normalizeWinningsForComparison(value) !== '0';
 }
 
 function cleanRef(value: string): string {
@@ -99,12 +113,13 @@ function isPendingStatus(statusValue: string): boolean {
 }
 
 function hasExistingResult(player: Player): boolean {
+  const existingStatus = normalizeResultStatus(player.result_status);
   return [
-    player.exit_level,
-    player.result_status,
-    player.winnings,
-    player.telebirr_ref,
-  ].some((value) => value.trim().length > 0);
+    player.exit_level.trim().length > 0,
+    existingStatus.length > 0,
+    hasMeaningfulWinnings(player.winnings),
+    existingStatus === 'Won' && player.telebirr_ref.trim().length > 0,
+  ].some(Boolean);
 }
 
 function hasLockedStatus(player: Player): boolean {
@@ -124,20 +139,21 @@ function statusEditRequiresSuperAdmin(player: Player, nextStatus: string): boole
 
 function resultEditRequiresSuperAdmin(player: Player, nextDraft: Draft, nextWinnings: number): boolean {
   const existingStatus = normalizeResultStatus(player.result_status);
-  const nextStatus = normalizeResultStatus(nextDraft.status);
+  const nextStatus = nextDraft.status;
+  if (!existingStatus) return false;
   const existingValues = [
     player.exit_level.trim(),
     existingStatus,
-    player.winnings.trim(),
+    normalizeWinningsForComparison(player.winnings),
     existingStatus === 'Failed' ? '' : player.telebirr_ref.trim(),
   ];
-  const hasRecordedResult = existingValues.some((value) => value.length > 0);
+  const hasRecordedResult = hasExistingResult(player);
   if (!hasRecordedResult) return false;
 
   const nextValues = [
     nextDraft.exit_level.trim(),
     nextStatus,
-    String(nextWinnings).trim(),
+    normalizeWinningsForComparison(nextWinnings),
     nextStatus === 'Failed' ? '' : nextDraft.telebirr_ref.trim(),
   ];
   return nextValues.some((value, index) => value !== existingValues[index]);
@@ -205,9 +221,10 @@ export function AdminPage({ token, role }: Props) {
   }, [players, query]);
 
   function draftFor(player: Player): Draft {
+    const existingStatus = normalizeResultStatus(player.result_status);
     return drafts[player.row_number] || {
       exit_level: (player.exit_level as ExitLevel) || 'Level 1',
-      status: player.result_status ? normalizeResultStatus(player.result_status) : 'Failed',
+      status: existingStatus || 'Failed',
       telebirr_ref: player.telebirr_ref || '',
     };
   }

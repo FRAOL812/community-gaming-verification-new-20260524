@@ -16,6 +16,35 @@ def _normalize_result_status(value: str) -> str:
     return normalized
 
 
+def _normalize_winnings_value(value: str | int) -> str:
+    trimmed = str(value).strip()
+    if not trimmed:
+        return "0"
+    try:
+        numeric = float(trimmed)
+    except ValueError:
+        return trimmed
+    if numeric.is_integer():
+        return str(int(numeric))
+    return format(numeric, "g")
+
+
+def _has_meaningful_winnings(value: str | int) -> bool:
+    return _normalize_winnings_value(value) != "0"
+
+
+def _has_recorded_result(exit_level: str, status: str, winnings: str | int, telebirr_ref: str) -> bool:
+    normalized_status = _normalize_result_status(status)
+    return any(
+        (
+            exit_level.strip(),
+            normalized_status in ("Won", "Failed"),
+            _has_meaningful_winnings(winnings),
+            telebirr_ref.strip() if normalized_status == "Won" else "",
+        )
+    )
+
+
 def _get_player_by_row(players: list[Player], row_number: int) -> Player:
     for player in players:
         if player.row_number == row_number:
@@ -24,20 +53,27 @@ def _get_player_by_row(players: list[Player], row_number: int) -> Player:
 
 
 def _result_edit_requires_super_admin(player: Player, next_exit_level: str, next_status: str, next_winnings: int, next_telebirr_ref: str) -> bool:
-    existing_values = (
-        player.exit_level.strip(),
-        _normalize_result_status(player.result_status),
-        player.winnings.strip(),
-        player.telebirr_ref.strip(),
+    existing_status = _normalize_result_status(player.result_status)
+    has_existing_result = _has_recorded_result(
+        player.exit_level,
+        existing_status,
+        player.winnings,
+        player.telebirr_ref,
     )
-    has_existing_result = any(existing_values)
     if not has_existing_result:
         return False
+    existing_values = (
+        player.exit_level.strip(),
+        existing_status,
+        _normalize_winnings_value(player.winnings),
+        player.telebirr_ref.strip() if existing_status == "Won" else "",
+    )
+    normalized_next_status = _normalize_result_status(next_status)
     next_values = (
         next_exit_level.strip(),
-        _normalize_result_status(next_status),
-        str(next_winnings).strip(),
-        next_telebirr_ref.strip(),
+        normalized_next_status,
+        _normalize_winnings_value(next_winnings),
+        next_telebirr_ref.strip() if normalized_next_status == "Won" else "",
     )
     return next_values != existing_values
 
