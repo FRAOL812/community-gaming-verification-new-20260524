@@ -365,28 +365,31 @@ export function AdminPage({ token, role }: Props) {
             const preview = draft.status === 'Won' ? payoutForWon(draft.exit_level) : payoutForFailed(draft.exit_level);
             const statusLocked = hasLockedStatus(player);
             const resultFilled = hasExistingResult(player);
+            const rowLocked = statusLocked || resultFilled;
             const statusChangeLockedForAdmin = role === 'admin' && statusEditRequiresSuperAdmin(player, currentStatus);
             const resultChangeLockedForAdmin = role === 'admin' && resultEditRequiresSuperAdmin(player, draft, preview);
             const recordedResultStatus = normalizeResultStatusForDisplay(player.result_status);
+            const mergedStatusText = recordedResultStatus
+              ? `Status: ${normalizeVerificationStatus(player.verification_status)} | Result: ${recordedResultStatus}`
+              : `Status: ${normalizeVerificationStatus(player.verification_status)} | Result: Pending`;
             return (
               <article key={player.row_number} className="rounded-[2rem] border border-white/10 bg-white/10 p-4 shadow-glow">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <span className="rounded-full bg-yellow-400 px-3 py-1 text-xs font-black text-slate-950">Row {player.row_number}</span>
-                      <span className="rounded-full bg-sky-900 px-3 py-1 text-xs font-black text-sky-200">Status: {normalizeVerificationStatus(player.verification_status)}</span>
-                      {recordedResultStatus ? <span className="rounded-full bg-emerald-400 px-3 py-1 text-xs font-black text-slate-950">Logged: {recordedResultStatus}</span> : <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-black text-white">Pending Result</span>}
-                      {statusLocked && <span className="rounded-full bg-rose-500 px-3 py-1 text-xs font-black text-white">Status Locked</span>}
-                      {resultFilled && <span className="rounded-full bg-indigo-500 px-3 py-1 text-xs font-black text-white">Result Filled</span>}
-                      {role === 'super_admin' && (statusLocked || resultFilled) && (
-                        <span className="rounded-full bg-amber-300 px-3 py-1 text-xs font-black text-slate-950">Super Admin Override Enabled</span>
+                      <span className="rounded-full bg-sky-900 px-3 py-1 text-xs font-black text-sky-200">{mergedStatusText}</span>
+                      {rowLocked && (
+                        <span className={`rounded-full px-3 py-1 text-xs font-black ${role === 'super_admin' ? 'bg-amber-300 text-slate-950' : 'bg-indigo-500 text-white'}`}>
+                          {role === 'super_admin' ? 'Locked Row (Override Enabled)' : 'Locked Row'}
+                        </span>
                       )}
                     </div>
                     <h3 className="truncate text-2xl font-black text-white">{player.full_name}</h3>
                     <p className="text-lg font-black text-yellow-300">{player.youtube_handle}</p>
                     <p className="mt-1 text-sm font-semibold text-slate-300">{player.phone_number} | {player.email}</p>
                     {player.telebirr_ref && <p className="mt-2 text-sm font-black text-emerald-300">Telebirr: {player.telebirr_ref}</p>}
-                    {(statusLocked || resultFilled) && (
+                    {rowLocked && (
                       <div className="mt-3 rounded-2xl border border-indigo-400/40 bg-indigo-500/10 p-3 text-xs font-bold text-indigo-100">
                         <p className="mb-2 text-[11px] font-black uppercase tracking-wider text-indigo-200">Already Saved Data</p>
                         <div className="grid gap-1 sm:grid-cols-2">
