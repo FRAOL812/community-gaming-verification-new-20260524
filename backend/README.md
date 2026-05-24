@@ -22,7 +22,7 @@ Then edit `.env` with:
 
 ```text
 YT_API_KEY=...
-SHEET_ID=...
+SHEET_ID=1_rP5g4yHA56AMf7qHCoxSFmN5Ba2kIlpMSBHCiWaaJs
 SUPER_ADMIN_PASSWORD=SUPER_ADMIN_2026
 ```
 

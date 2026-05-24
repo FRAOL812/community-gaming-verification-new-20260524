@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+DEFAULT_SHEET_ID = "1_rP5g4yHA56AMf7qHCoxSFmN5Ba2kIlpMSBHCiWaaJs"
+
 
 class Settings:
     APP_NAME: str = os.getenv("APP_NAME", "Community Gaming Verification API")
@@ -15,7 +17,7 @@ class Settings:
     SUPER_ADMIN_PASSWORD: str = os.getenv("SUPER_ADMIN_PASSWORD", "SUPER_ADMIN_2026")
 
     YT_API_KEY: str = os.getenv("YT_API_KEY", "AIzaSyCGMs8CFuVth2eJkUQ4SUWfer4k0hUIGdc")
-    SHEET_ID: str = os.getenv("SHEET_ID", "")
+    SHEET_ID: str = os.getenv("SHEET_ID", DEFAULT_SHEET_ID)
     SHEET_TAB: str = os.getenv("SHEET_TAB", "Players")
     SERVICE_ACCOUNT_FILE: str = os.getenv("SERVICE_ACCOUNT_FILE", "credentials.json")
     GOOGLE_CREDENTIALS_JSON: str = os.getenv("GOOGLE_CREDENTIALS_JSON", "")
